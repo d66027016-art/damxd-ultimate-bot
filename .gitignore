@@ -1,0 +1,27 @@
+# Dependencies
+node_modules/
+
+# Secrets
+.env
+
+# Runtime database (stored locally/on server)
+database.json
+
+# Build artifacts & zips
+*.zip
+
+# JSON test outputs
+cashfree_out.json
+currencies.json
+invoice.json
+filtered.txt
+
+# Test/debug scripts
+test_*.js
+scanner.js
+scan_checkers.js
+
+# OS & editor files
+.DS_Store
+*.log
+.vscode/
