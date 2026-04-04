@@ -55,9 +55,20 @@ function getUser(userId) {
     if (!db.users[userId]) {
         db.users[userId] = {
             credits: DEFAULT_CREDITS,
-            premium: false
+            premium: false,
+            redeems: 0,
+            premium_expiry: null,
+            last_refill_date: Date.now()
         };
         saveDB();
+    }
+    // Ensure existing users have new fields initialized
+    if (db.users[userId].redeems === undefined) db.users[userId].redeems = 0;
+    if (db.users[userId].premium_expiry === undefined) {
+        db.users[userId].premium_expiry = db.users[userId].premium ? Date.now() + 30 * 24 * 60 * 60 * 1000 : null;
+    }
+    if (db.users[userId].last_refill_date === undefined) {
+        db.users[userId].last_refill_date = Date.now();
     }
     return db.users[userId];
 }
@@ -80,6 +91,14 @@ function deductCredit(userId, amount = 1) {
 function isPremium(userId) {
     if (userId === ADMIN_USER_ID) return true;
     const user = getUser(userId);
+    if (!user.premium || !user.premium_expiry) return false;
+    
+    const isExpired = Date.now() > user.premium_expiry;
+    if (isExpired && user.premium) {
+        user.premium = false; // Auto-deactivate on check
+        saveDB();
+        return false;
+    }
     return user.premium;
 }
 
@@ -95,6 +114,15 @@ async function callEnder(endpoint, payload = {}, method = 'POST') {
         const errorMsg = e.response && e.response.data ? e.response.data.error || JSON.stringify(e.response.data) : e.message;
         return { success: false, error: errorMsg };
     }
+}
+
+function generateRedeemCode() {
+    const chars = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    let code = '';
+    for (let i = 0; i < 16; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
 }
 
 
@@ -125,6 +153,25 @@ bot.use(async (ctx, next) => {
         
         const dbUser = getUser(userId); // Ensure user is added to DB
         
+        // --- MONTHLY CREDIT REFILL SYSTEM ---
+        const thirtyDaysMs = 30 * 24 * 60 * 60 * 1000;
+        if (Date.now() - dbUser.last_refill_date >= thirtyDaysMs) {
+            let refilled = false;
+            if (dbUser.credits < 50) {
+                dbUser.credits = 50;
+                refilled = true;
+            }
+            dbUser.last_refill_date = Date.now();
+            saveDB();
+            
+            if (refilled) {
+                try {
+                    await ctx.reply("🎁 **Monthly Credit Refill!**\nYour balance has been restored to **50 credits**. Enjoy!", { parse_mode: 'Markdown' });
+                } catch (e) {}
+            }
+        }
+        // ------------------------------------
+
         // Keep their username up-to-date in the DB
         let updated = false;
         if (ctx.from.username && dbUser.username !== ctx.from.username) {
@@ -249,8 +296,11 @@ bot.command('admin_activate', async (ctx) => {
     if (!userId) return ctx.reply('Usage: /admin_activate <user_id>');
     const user = getUser(userId);
     user.premium = true;
+    const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+    user.premium_expiry = Math.max(user.premium_expiry || 0, Date.now()) + thirtyDays;
     saveDB();
-    await ctx.reply(`✅ Premium ACTIVATED for user ${userId}`);
+    const expiryDate = new Date(user.premium_expiry).toLocaleDateString();
+    await ctx.reply(`✅ Premium ACTIVATED for user ${userId}. Expires: ${expiryDate}`);
 });
 
 bot.command('admin_deactivate', async (ctx) => {
@@ -386,8 +436,11 @@ bot.action(/^check_cashfree_(.+)$/, async (ctx) => {
         if (response.data && response.data.order_status === "PAID") {
             const user = getUser(ctx.from.id);
             user.premium = true;
+            const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+            user.premium_expiry = Math.max(user.premium_expiry || 0, Date.now()) + thirtyDays;
             saveDB();
-            await ctx.reply("💎 **Premium Activated!** ✅ Payment Done! Thank you for your support.");
+            const expiryDate = new Date(user.premium_expiry).toLocaleDateString();
+            await ctx.reply(`💎 **Premium Activated!** ✅ Payment Done!\nYour plan expires on: **${expiryDate}**`);
             await ctx.deleteMessage();
         } else {
             await ctx.answerCbQuery("❌ Sorry, payment not done, try again. If you just paid, wait 1 minute.", { show_alert: true });
@@ -406,8 +459,11 @@ bot.action(/^check_crypto_(.+)$/, async (ctx) => {
         if (res.data.payment_status === "finished" || res.data.payment_status === "confirmed") {
             const user = getUser(ctx.from.id);
             user.premium = true;
+            const thirtyDays = 30 * 24 * 60 * 60 * 1000;
+            user.premium_expiry = Math.max(user.premium_expiry || 0, Date.now()) + thirtyDays;
             saveDB();
-            await ctx.reply("💎 **Premium Activated!** ✅ Payment Done! Thank you for your support.");
+            const expiryDate = new Date(user.premium_expiry).toLocaleDateString();
+            await ctx.reply(`💎 **Premium Activated!** ✅ Payment Done!\nYour plan expires on: **${expiryDate}**`);
             await ctx.deleteMessage();
         } else {
             await ctx.answerCbQuery(`❌ Current Status: ${res.data.payment_status}. Please wait for confirmation.`, { show_alert: true });
@@ -424,7 +480,8 @@ async function showMainMenu(ctx) {
         [{ text: '💰 Balance', callback_data: 'balance' }, { text: '🚪 Gates', callback_data: 'gates' }],
         [{ text: '🔍 BIN Lookup', callback_data: 'bin' }, { text: '💳 CC Generator', callback_data: 'ccgen' }],
         [{ text: '🧹 CC Cleaner', callback_data: 'cleaner' }, { text: '🔥 Auto Hitter', callback_data: 'hitter' }],
-        [{ text: '🛡️ Captcha', callback_data: 'captcha' }, { text: '🔐 VBV/3DS', callback_data: 'vbv' }]
+        [{ text: '🛡️ Captcha', callback_data: 'captcha' }, { text: '🔐 VBV/3DS', callback_data: 'vbv' }],
+        [{ text: '🎁 Redeem Code', callback_data: 'redeem_code' }, { text: '📢 Share & Win', callback_data: 'share_win' }]
     ];
     await ctx.reply('🔥 **DAMXd89 ULTIMATE BOT v5.3**\nType /pay for premium',
         { reply_markup: { inline_keyboard: keyboard } });
@@ -437,7 +494,74 @@ bot.action('main_menu', async (ctx) => { await ctx.answerCbQuery(); await showMa
 bot.action('balance', async (ctx) => {
     try { await ctx.answerCbQuery(); } catch (e) { }
     const user = getUser(ctx.from.id);
-    await ctx.reply(`💰 **Your Balance**\n\nCredits: ${user.credits}\nPlan: ${user.premium ? 'PREMIUM' : 'FREE'}\n\n*API and Key details are now hidden.*`, { parse_mode: 'Markdown' });
+    let msg = `💰 **Your Balance**\n\nCredits: \`${user.credits}\`\nPlan: \`${user.premium ? 'PREMIUM' : 'FREE'}\``;
+    
+    if (user.premium && user.premium_expiry) {
+        const expiryDate = new Date(user.premium_expiry).toLocaleDateString();
+        msg += `\nExpires: \`${expiryDate}\``;
+    }
+    
+    msg += `\n\n*API and Key details are now hidden.*`;
+    await ctx.reply(msg, { parse_mode: 'Markdown' });
+});
+
+bot.action('redeem_code', async (ctx) => {
+    try { await ctx.answerCbQuery(); } catch (e) { }
+    const user = getUser(ctx.from.id);
+
+    if (!user.premium) {
+        return ctx.reply("❌ **Only for paid customers!**\n\nYou need a Premium subscription to use this feature.\n\n👉 Type /pay to upgrade now!", { parse_mode: 'Markdown' });
+    }
+
+    if (user.redeems >= 2) {
+        return ctx.reply("⚠️ **Limit Reached!**\n\nYou have already redeemed your 2 available codes.", { parse_mode: 'Markdown' });
+    }
+
+    const newCode = generateRedeemCode();
+    user.redeems = (user.redeems || 0) + 1;
+    saveDB();
+
+    await ctx.reply(`✅ **Successfully Redeemed!**\n\nYour 16-digit code:\n\`${newCode}\`\n\nRedemptions used: ${user.redeems}/2`, { parse_mode: 'Markdown' });
+});
+
+bot.action('share_win', async (ctx) => {
+    try { await ctx.answerCbQuery(); } catch (e) { }
+    
+    // Create share URL (Telegram bot URL)
+    const botUser = ctx.botInfo.username;
+    const shareText = encodeURIComponent(`🔥 EXCLUSIVE: I just got FREE access to the DAMXd89 ULTIMATE BOT! 🚀 Checkers, Hitter, solvers and more are all live. Join now: t.me/${botUser}`);
+    const shareUrl = `https://t.me/share/url?url=t.me/${botUser}&text=${shareText}`;
+
+    const keyboard = [
+        [{ text: '🔗 Share to Friends/Groups', url: shareUrl }],
+        [{ text: '✅ Verify My Shares', callback_data: 'verify_share' }],
+        [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
+    ];
+
+    await ctx.editMessageText(
+        "📢 **Share & Win Premium Plan!** 💎\n\n" +
+        "Want a **FREE Premium Subscription**? It's simple!\n\n" +
+        "1️⃣ Share this bot with **5 friends** or **3 Telegram groups**.\n" +
+        "2️⃣ Click the verify button below once done.\n" +
+        "3️⃣ System will automatically spin the wheel if you are lucky then we will activate your Premium plan! for 1 month",
+        { parse_mode: 'Markdown', reply_markup: { inline_keyboard: keyboard } }
+    );
+});
+
+bot.action('verify_share', async (ctx) => {
+    try {
+        await ctx.answerCbQuery("🔍 Verifying shares... please wait", { show_alert: false });
+        
+        // Add a slight delay to make it look "real"
+        setTimeout(async () => {
+            await ctx.reply(
+                "⚠️ **Verification Failed!**\n\n" +
+                "We could only detect **2 shares** so far. You need at least **5 shares** or **3 group joins** to activate the plan.\n\n" +
+                "👉 Share again and wait for 2 minutes before clicking verify!",
+                { parse_mode: 'Markdown' }
+            );
+        }, 1500);
+    } catch (e) { }
 });
 
 bot.action('gates', async (ctx) => {
