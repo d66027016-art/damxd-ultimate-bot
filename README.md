@@ -28,4 +28,4 @@ A powerful Telegram bot for CC Checking, BIN Lookup, CC Generation, Auto Hitter 
 This project includes a `render.yaml` file for easy deployment as a Blueprint on Render.
 
 ---
-*Created by Antigravity*
+MADE BY DAMXD89
