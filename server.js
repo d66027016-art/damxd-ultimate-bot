@@ -336,14 +336,14 @@ bot.command('pay', async (ctx) => {
         [{ text: '₿ Crypto (BTC/ETH/USDT/SOL)', callback_data: 'pay_crypto' }],
         [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
     ];
-    await ctx.reply('💎 **Unlock Premium Access**\nUnlimited hitter, solvers & more\nPrice: ₹499 / $6\nChoose method:',
+    await ctx.reply('💎 **Unlock Premium Access**\nUnlimited hitter, solvers & more\nPrice: ₹4999 / $60\nChoose method:',
         { reply_markup: { inline_keyboard: keyboard } });
 });
 
 bot.action('pay_cashfree', async (ctx) => {
     try { await ctx.answerCbQuery(); } catch (e) { }
     const orderId = `cf_${Date.now()}_${ctx.from.id}`;
-    const amount = 499;
+    const amount = 4999;
 
     const request = {
         order_amount: amount,
@@ -389,7 +389,7 @@ bot.action('pay_crypto', async (ctx) => {
         [{ text: 'Tron (TRX)', callback_data: 'pay_coin_trx' }],
         [{ text: '🔙 Back', callback_data: 'main_menu' }]
     ];
-    await ctx.editMessageText('💎 **Select Cryptocurrency ($6 / ₹499)**\nChoose your preferred coin:', {
+    await ctx.editMessageText('💎 **Select Cryptocurrency ($60 / ₹4999)**\nChoose your preferred coin:', {
         parse_mode: 'Markdown',
         reply_markup: { inline_keyboard: keyboard }
     });
@@ -400,7 +400,7 @@ bot.action(/^pay_coin_(.+)$/, async (ctx) => {
     const coin = ctx.match[1];
     
     const payload = {
-        price_amount: 6,
+        price_amount: 60,
         price_currency: "usd",
         pay_currency: coin,
         order_id: `crypto_${Date.now()}`,
