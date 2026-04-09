@@ -326,7 +326,27 @@ bot.command('admin_add', async (ctx) => {
 });
 
 bot.command('id', async (ctx) => {
-    await ctx.reply(`Your Telegram ID: ${ctx.from.id}`);
+    await ctx.reply(`👤 Your Telegram ID: <code>${ctx.from.id}</code>\n🏠 Group ID: <code>${ctx.chat.id}</code>`, { parse_mode: 'HTML' });
+});
+
+bot.command('groupid', async (ctx) => {
+    await ctx.reply(`🏠 **Group ID**: <code>${ctx.chat.id}</code>`, { parse_mode: 'HTML' });
+});
+
+bot.command('help', async (ctx) => {
+    const helpMsg = `📖 <b>DAMXd89 ULTIMATE BOT Help</b>\n\n` +
+        `<b>Commands:</b>\n` +
+        `• /start - Show main menu\n` +
+        `• /bin &lt;6-8 digits&gt; - BIN Lookup\n` +
+        `• /ccgen &lt;6 digits&gt; - Generate cards\n` +
+        `• /vbv &lt;card&gt; - VBV/3DS Checker\n` +
+        `• /cleaner &lt;cards&gt; - Card Cleaner\n` +
+        `• /hitter &lt;link&gt; - Auto Hitter (Stripe)\n` +
+        `• /captcha &lt;sitekey|url|type&gt; - Solver\n` +
+        `• /id - Show your ID and Group ID\n` +
+        `• /pay - Upgrade to Premium\n\n` +
+        `💡 <i>In groups, use commands starting with / to ensure the bot responds!</i>`;
+    await ctx.reply(helpMsg, { parse_mode: 'HTML' });
 });
 
 // ==================== PAYMENT SYSTEM ====================
@@ -475,18 +495,31 @@ bot.action(/^check_crypto_(.+)$/, async (ctx) => {
 
 // ==================== MAIN MENU ====================
 async function showMainMenu(ctx) {
-    clearState(ctx.from.id);
-    const botUser = ctx.botInfo ? ctx.botInfo.username : '';
-    const keyboard = [
-        [{ text: '💰 Balance', callback_data: 'balance' }, { text: '🚪 Gates', callback_data: 'gates' }],
-        [{ text: '🔍 BIN Lookup', callback_data: 'bin' }, { text: '💳 CC Generator', callback_data: 'ccgen' }],
-        [{ text: '🧹 CC Cleaner', callback_data: 'cleaner' }, { text: '🔥 Auto Hitter', callback_data: 'hitter' }],
-        [{ text: '🛡️ Captcha', callback_data: 'captcha' }, { text: '🔐 VBV/3DS', callback_data: 'vbv' }],
-        [{ text: '🎁 Redeem Code', callback_data: 'redeem_code' }, { text: '📢 Share & Win', callback_data: 'share_win' }],
-        [{ text: '➕ Add to Group', url: `https://t.me/${botUser}?startgroup=true` }]
-    ];
-    await ctx.reply('🔥 **DAMXd89 ULTIMATE BOT v5.3**\nType /pay for premium',
-        { reply_markup: { inline_keyboard: keyboard } });
+    try {
+        clearState(ctx.from.id);
+        const botUser = (ctx.botInfo && ctx.botInfo.username) ? ctx.botInfo.username : 'Authhitterbot';
+        const isGroup = ctx.chat.type !== 'private';
+        
+        const keyboard = [
+            [{ text: '💰 Balance', callback_data: 'balance' }, { text: '🚪 Gates', callback_data: 'gates' }],
+            [{ text: '🔍 BIN Lookup', callback_data: 'bin' }, { text: '💳 CC Generator', callback_data: 'ccgen' }],
+            [{ text: '🧹 CC Cleaner', callback_data: 'cleaner' }, { text: '🔥 Auto Hitter', callback_data: 'hitter' }],
+            [{ text: '🛡️ Captcha', callback_data: 'captcha' }, { text: '🔐 VBV/3DS', callback_data: 'vbv' }],
+            [{ text: '🎁 Redeem Code', callback_data: 'redeem_code' }, { text: '📢 Share & Win', callback_data: 'share_win' }],
+            [{ text: '➕ Add to Group', url: `https://t.me/${botUser}?startgroup=true` }]
+        ];
+
+        let msg = `🔥 <b>DAMXd89 ULTIMATE BOT v5.3</b>\n`;
+        if (isGroup) {
+            msg += `📍 <i>Group Mode Active</i>\n💡 Use /help to see all commands.`;
+        } else {
+            msg += `Type /pay for premium`;
+        }
+
+        await ctx.reply(msg, { parse_mode: 'HTML', reply_markup: { inline_keyboard: keyboard } }).catch(e => console.error('Reply Error:', e.message));
+    } catch (err) {
+        console.error('CRASH IN showMainMenu:', err);
+    }
 }
 
 bot.start(showMainMenu);
@@ -503,7 +536,8 @@ bot.command('addtogroup', async (ctx) => {
 bot.on('new_chat_members', async (ctx) => {
     const isBotAdded = ctx.message.new_chat_members.some(u => u.id === ctx.botInfo.id);
     if (isBotAdded) {
-        await ctx.reply('👋 **Hello Everyone!**\n\nI am the **DAMXd89 ULTIMATE BOT v5.3**. I am now ready to help you with Checkers, Hitters, Solvers, and more right here in this group!\n\n👉 Type /start to see what I can do.');
+        const botName = ctx.botInfo.first_name;
+        await ctx.reply(`👋 **Hello Everyone!**\n\nI am the **${botName}**. I am now ready to help you with Checkers, Hitters, Solvers, and more right here in this group!\n\n**🚀 Quick Start:**\n• Type /start to see the menu\n• Type /help to see all commands\n\n⚠️ **Admin Tip**: Make me an admin and disable "Privacy Mode" in @BotFather to enable automatic BIN detection!`);
     }
 });
 
@@ -765,7 +799,7 @@ bot.on('text', async (ctx) => {
     // CC Generator Command
     if (text.startsWith('/ccgen')) {
         const bin = text.split(' ')[1];
-        if (!bin || !/^\d{6}$/.test(bin)) return ctx.reply("Usage: /ccgen <6-digit bin>");
+        if (!bin || !/^\d{6,8}$/.test(bin)) return ctx.reply("Usage: /ccgen <6-8 digit bin>");
 
         const user = getUser(ctx.from.id);
         if (!user.premium && user.credits < 1) return ctx.reply("⚠️ No credits! Type /pay to top up.");
@@ -782,10 +816,90 @@ bot.on('text', async (ctx) => {
         }
         return;
     }
+
+    // Command-based handlers for groups (supporting both /cmd and /cmd@botname)
+    const args = text.split(' ');
+    const command = args[0].split('@')[0].toLowerCase();
+    const input = args.slice(1).join(' ');
+
+    if (command === '/bin') {
+        if (!input || !/^\d{6,8}$/.test(input)) return ctx.reply("Usage: /bin <6-8 digit bin>");
+        const user = getUser(ctx.from.id);
+        if (!user.premium && user.credits < 1) return ctx.reply("⚠️ No credits! Type /pay to top up.");
+        await ctx.reply(`🔍 Looking up BIN: ${input}...`);
+        const res = await callEnder('/tools/bin-lookup', { bins: [input] }, 'POST');
+        if (res.success && res.data.bins && res.data.bins[0]) {
+            deductCredit(ctx.from.id, 1);
+            const data = res.data.bins[0];
+            const msg = `✅ **BIN INFO**\n\n` +
+                `💳 BIN: ${input}\n` +
+                `🏦 Bank: ${data.issuer || 'Unknown'}\n` +
+                `🌍 Country: ${data.country_name || 'Unknown'}\n` +
+                `🏴 Flag: ${data.country_emoji || ''}\n` +
+                `🔹 Type: ${data.type || 'Unknown'}\n` +
+                `🔸 Brand: ${data.brand || 'Unknown'}\n\n` +
+                `💳 Remaining Credits: ${getUser(ctx.from.id).credits}`;
+            let finalMsg = msg;
+            if (!user.premium) finalMsg += `\n\n💎 <b>Upgrade to Premium for unlimited uses!</b> Type /pay`;
+            await ctx.reply(finalMsg);
+        } else {
+            await ctx.reply(`❌ BIN Error: ${res.error || 'Not found'}`);
+        }
+        return;
+    }
+
+    if (command === '/vbv') {
+        if (!input) return ctx.reply("Usage: /vbv <cc|mm|yy|cvv>");
+        const user = getUser(ctx.from.id);
+        if (!user.premium && user.credits < 2) return ctx.reply("⚠️ No credits! Type /pay to top up.");
+        await ctx.reply("🔐 **Processing VBV...**");
+        const res = await callEnder('/checkers/vbv', { gate: 'vbv', cards: [input] }, 'POST');
+        if (res.success) {
+            deductCredit(ctx.from.id, 2);
+            await ctx.reply(`✅ **VBV Result**\n\n<pre>${JSON.stringify(res.data, null, 2)}</pre>`, { parse_mode: 'HTML' });
+        } else {
+            await ctx.reply(`❌ VBV Error: ${res.error || 'Failed'}`);
+        }
+        return;
+    }
+
+    if (command === '/hitter') {
+        if (!input) return ctx.reply("Usage: /hitter <stripe_checkout_link>");
+        userStates[ctx.from.id] = 'WAITING_HITTER_CARDS';
+        hitterLinks[ctx.from.id] = input;
+        await ctx.reply("🔥 **Hitter Link Set!** Now send your **Cards List** (format: number|month|year|cvv).");
+        return;
+    }
+
+    if (command === '/cleaner') {
+        if (!input) return ctx.reply("Usage: /cleaner <cards_list>");
+        const user = getUser(ctx.from.id);
+        if (!user.premium && user.credits < 2) return ctx.reply("⚠️ No credits! Type /pay to top up.");
+        await ctx.reply("🧹 **Cleaning Cards...**");
+        const res = await callEnder('/tools/cc-cleaner', { input: input }, 'POST');
+        if (res.success) {
+            deductCredit(ctx.from.id, 2);
+            await ctx.reply(`✅ **Cleaned List**\n\n<pre>${JSON.stringify(res.data, null, 2)}</pre>`, { parse_mode: 'HTML' });
+        } else {
+            await ctx.reply(`❌ Cleaner Error: ${res.error || 'Failed'}`);
+        }
+        return;
+    }
 });
 
-bot.launch().catch(err => {
-    console.error('❌ FAILED TO LAUNCH BOT:', err.message);
+bot.catch((err, ctx) => {
+    console.error(`❌ Telegraf Error for update ${ctx.updateType}:`, err);
+    // Silent fail for user
+});
+
+bot.launch().then(() => {
+    console.log('🚀 DAMXd89 ULTIMATE BOT v5.3 FIXED AND RUNNING SUCCESSFULLY!');
+}).catch(err => {
+    if (err.message.includes('429')) {
+        console.error('❌ RATE LIMIT ERROR: Bot is already running elsewhere or too many restarts. Waiting...');
+    } else {
+        console.error('❌ FAILED TO LAUNCH BOT:', err.message);
+    }
 });
 
 notifyBot.launch().catch(err => {
