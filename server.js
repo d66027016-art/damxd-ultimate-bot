@@ -336,14 +336,14 @@ bot.command('pay', async (ctx) => {
         [{ text: '₿ Crypto (BTC/ETH/USDT/SOL)', callback_data: 'pay_crypto' }],
         [{ text: '🔙 Back to Menu', callback_data: 'main_menu' }]
     ];
-    await ctx.reply('💎 **Unlock Premium Access**\nUnlimited hitter, solvers & more\nPrice: ₹4999 / $60\nChoose method:',
+    await ctx.reply('💎 **Unlock Premium Access**\nUnlimited hitter, solvers & more\nPrice: ₹999 / $12\nChoose method:',
         { reply_markup: { inline_keyboard: keyboard } });
 });
 
 bot.action('pay_cashfree', async (ctx) => {
     try { await ctx.answerCbQuery(); } catch (e) { }
     const orderId = `cf_${Date.now()}_${ctx.from.id}`;
-    const amount = 4999;
+    const amount = 999;
 
     const request = {
         order_amount: amount,
@@ -389,7 +389,7 @@ bot.action('pay_crypto', async (ctx) => {
         [{ text: 'Tron (TRX)', callback_data: 'pay_coin_trx' }],
         [{ text: '🔙 Back', callback_data: 'main_menu' }]
     ];
-    await ctx.editMessageText('💎 **Select Cryptocurrency ($60 / ₹4999)**\nChoose your preferred coin:', {
+    await ctx.editMessageText('💎 **Select Cryptocurrency ($12 / ₹999)**\nChoose your preferred coin:', {
         parse_mode: 'Markdown',
         reply_markup: { inline_keyboard: keyboard }
     });
@@ -400,7 +400,7 @@ bot.action(/^pay_coin_(.+)$/, async (ctx) => {
     const coin = ctx.match[1];
     
     const payload = {
-        price_amount: 60,
+        price_amount: 12,
         price_currency: "usd",
         pay_currency: coin,
         order_id: `crypto_${Date.now()}`,
@@ -476,12 +476,14 @@ bot.action(/^check_crypto_(.+)$/, async (ctx) => {
 // ==================== MAIN MENU ====================
 async function showMainMenu(ctx) {
     clearState(ctx.from.id);
+    const botUser = ctx.botInfo ? ctx.botInfo.username : '';
     const keyboard = [
         [{ text: '💰 Balance', callback_data: 'balance' }, { text: '🚪 Gates', callback_data: 'gates' }],
         [{ text: '🔍 BIN Lookup', callback_data: 'bin' }, { text: '💳 CC Generator', callback_data: 'ccgen' }],
         [{ text: '🧹 CC Cleaner', callback_data: 'cleaner' }, { text: '🔥 Auto Hitter', callback_data: 'hitter' }],
         [{ text: '🛡️ Captcha', callback_data: 'captcha' }, { text: '🔐 VBV/3DS', callback_data: 'vbv' }],
-        [{ text: '🎁 Redeem Code', callback_data: 'redeem_code' }, { text: '📢 Share & Win', callback_data: 'share_win' }]
+        [{ text: '🎁 Redeem Code', callback_data: 'redeem_code' }, { text: '📢 Share & Win', callback_data: 'share_win' }],
+        [{ text: '➕ Add to Group', url: `https://t.me/${botUser}?startgroup=true` }]
     ];
     await ctx.reply('🔥 **DAMXd89 ULTIMATE BOT v5.3**\nType /pay for premium',
         { reply_markup: { inline_keyboard: keyboard } });
@@ -489,6 +491,21 @@ async function showMainMenu(ctx) {
 
 bot.start(showMainMenu);
 bot.action('main_menu', async (ctx) => { await ctx.answerCbQuery(); await showMainMenu(ctx); });
+
+bot.command('addtogroup', async (ctx) => {
+    const botUser = ctx.botInfo ? ctx.botInfo.username : '';
+    const keyboard = [[{ text: '➕ Add Me to Your Group', url: `https://t.me/${botUser}?startgroup=true` }]];
+    await ctx.reply('🚀 **Bring DAMXd89 ULTIMATE BOT to your group!**\n\nClick the button below to add me as an administrator in your group.', {
+        reply_markup: { inline_keyboard: keyboard }
+    });
+});
+
+bot.on('new_chat_members', async (ctx) => {
+    const isBotAdded = ctx.message.new_chat_members.some(u => u.id === ctx.botInfo.id);
+    if (isBotAdded) {
+        await ctx.reply('👋 **Hello Everyone!**\n\nI am the **DAMXd89 ULTIMATE BOT v5.3**. I am now ready to help you with Checkers, Hitters, Solvers, and more right here in this group!\n\n👉 Type /start to see what I can do.');
+    }
+});
 
 // ==================== FEATURE HANDLERS ====================
 bot.action('balance', async (ctx) => {
